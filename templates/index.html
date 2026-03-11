@@ -5,6 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Faculty AI — Smart Assistant</title>
+    <meta name="description" content="NIST Faculty AI — Find the right professor for any subject, topic, or research area.">
     <link
         href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,400&display=swap"
         rel="stylesheet">
@@ -994,6 +995,20 @@
             background: var(--border);
             margin: 8px 0;
         }
+
+        /* ─── SUGGESTION CHIPS (below input) ──── */
+        .suggestion-bar {
+            display: flex;
+            gap: 8px;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-top: 10px;
+        }
+
+        .suggestion-bar .sug-chip {
+            font-size: 12px;
+            padding: 6px 14px;
+        }
     </style>
 </head>
 
@@ -1070,6 +1085,12 @@
                     oninput="autoResize(this)" onkeydown="handleKey(event)"></textarea>
                 <button class="send-btn" id="sendBtn" onclick="sendMessage()" title="Send">➤</button>
             </div>
+            <div class="suggestion-bar">
+                <span class="sug-chip" onclick="sendQuick('Find faculty by subject')">📚 Find by Subject</span>
+                <span class="sug-chip" onclick="sendQuick('Show all CSE faculty')">🏢 Find by Department</span>
+                <span class="sug-chip" onclick="sendQuick('Find faculty by research area')">🔬 Find by Research Area</span>
+                <span class="sug-chip" onclick="sendQuick('List all faculty')">📋 Show All Faculty</span>
+            </div>
             <div class="input-hint">Enter to send &nbsp;·&nbsp; Shift+Enter for new line</div>
         </div>
     </main>
@@ -1081,6 +1102,19 @@
         function generateSessionId() {
             return 'sess_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
         }
+
+        // ─── Auto greeting on load ─────────────────────────
+        window.addEventListener('DOMContentLoaded', () => {
+            // Show greeting in chat after a brief delay
+            setTimeout(() => {
+                appendBotText(
+                    "👋 Hello! Welcome to <strong>NIST Faculty Finder!</strong><br>" +
+                    "I can help you find the perfect faculty member based on:<br>" +
+                    "📚 Subject or Topic &nbsp;|&nbsp; 🔬 Research Area &nbsp;|&nbsp; 🏢 Department<br>" +
+                    "Just tell me what you're looking for!"
+                );
+            }, 800);
+        });
 
         // ─── Load sidebar ─────────────────────────────
         async function loadFaculty() {
@@ -1139,7 +1173,6 @@
                 const welcome = document.getElementById("welcome");
                 if (welcome) welcome.remove();
 
-                // Clear chat and replay messages
                 chat.innerHTML = '';
                 for (const msg of messages) {
                     if (msg.role === 'user') {
@@ -1151,9 +1184,7 @@
                     }
                 }
 
-                loadHistory(); // refresh active state
-
-                // Close sidebar on mobile
+                loadHistory();
                 document.getElementById("sidebar").classList.remove("open");
                 document.getElementById("sidebarOverlay").classList.remove("show");
             } catch (e) { console.error(e); }
@@ -1212,7 +1243,6 @@
         <button class="quick-btn" onclick="sendQuick('List all faculty')">📋 All Faculty</button>
       </div>
     </div>`;
-            // Close sidebar on mobile
             document.getElementById("sidebar").classList.remove("open");
             document.getElementById("sidebarOverlay").classList.remove("show");
         }
@@ -1246,7 +1276,6 @@
                 appendBotText("⚠ Connection error. Make sure the backend server is running.");
             }
 
-            // Refresh history sidebar
             setTimeout(loadHistory, 500);
         }
 
@@ -1288,7 +1317,7 @@
         function handleResponse(data) {
             const t = data.type;
 
-            if (t === "greeting" || t === "farewell" || t === "thanks" || t === "error") {
+            if (t === "greeting" || t === "farewell" || t === "thanks" || t === "help" || t === "error") {
                 appendBotText(esc(data.reply));
                 return;
             }
@@ -1299,13 +1328,29 @@
             }
 
             if (t === "not_found") {
+                let html = esc(data.reply).replace(/\n/g, '<br>');
                 const sugs = (data.suggestions || []).map(s =>
-                    `<span class="sug-chip" onclick="sendQuick('Who teaches ${s}?')">${s}</span>`
+                    `<span class="sug-chip" onclick="sendQuick('Show all ${s} faculty')">${s}</span>`
                 ).join("");
-                appendBotText(
-                    esc(data.reply) +
-                    (sugs ? `<div class="sug-chips">${sugs}</div>` : "")
-                );
+                if (sugs) html += `<div class="sug-chips">${sugs}</div>`;
+
+                // Show partial matches if available
+                const partials = data.partial_matches || [];
+                if (partials.length > 0) {
+                    html += '<div style="margin-top:10px">';
+                    for (const p of partials) {
+                        html += `<div class="alt-card" onclick="sendQuick('Tell me about ${p.name}')">
+                            <div class="alt-dot"></div>
+                            <div>
+                                <div class="alt-name">${esc(p.name)}</div>
+                                <div class="alt-sub">${esc(p.designation)} · ${esc(p.department)}</div>
+                            </div>
+                        </div>`;
+                    }
+                    html += '</div>';
+                }
+
+                appendBotText(html);
                 return;
             }
 
@@ -1338,7 +1383,7 @@
           <div class="alt-name">${esc(a.name)}</div>
           <div class="alt-sub">${(a.core_subjects || []).join(", ")}</div>
         </div>
-        <div style="margin-left:auto;font-size:11.5px;color:var(--muted2)">${esc(a.cabin)}</div>
+        <div style="margin-left:auto;font-size:11.5px;color:var(--muted2)">${esc(a.cabin || '')}</div>
       </div>`).join("")}
   ` : "";
 
@@ -1366,7 +1411,7 @@
             <span class="info-icon">📚</span>
             <div class="info-block">
               <span class="info-label">Core Subjects</span>
-              <div class="tag-list">${subjects}</div>
+              <div class="tag-list">${subjects || '<span class="info-val">N/A</span>'}</div>
             </div>
           </div>
 
@@ -1374,7 +1419,7 @@
             <span class="info-icon">🔬</span>
             <div class="info-block">
               <span class="info-label">Research Areas</span>
-              <div class="tag-list">${research}</div>
+              <div class="tag-list">${research || '<span class="info-val">N/A</span>'}</div>
             </div>
           </div>
 

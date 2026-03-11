@@ -2,32 +2,40 @@
 db.py — Chat history storage for Faculty AI.
 
 Strategy:
-  1. Try connecting to MongoDB (if available)
-  2. If not, fall back to a local JSON file (chat_history.json)
-  This ensures chat history always works, even without MongoDB installed.
+  1. Load environment variables from .env file
+  2. Connect to MongoDB Atlas
+  3. Strict MongoDB reliance (no local JSON fallback)
 """
 
-import json
 import os
-import threading
 from datetime import datetime
 
-# Thread lock for JSON safety (important for multi-threaded servers like Render)
-_json_lock = threading.Lock()
+# ─── Load .env file ────────────────────────────────────────────────────────────
+try:
+    from dotenv import load_dotenv
+    load_dotenv(override=True)
+    print("[DB] ✅ Loaded .env file.")
+except ImportError:
+    print("[DB] ⚠️  python-dotenv not installed. Using system environment variables only.")
 
-# ─── Try MongoDB first ─────────────────────────────────────────────────────────
-_mongo_available = False
-_db = None
+
+# ─── MongoDB Connection ─────────────────────────────────────────────────────────
+import certifi
+from pymongo import MongoClient
+
+MONGO_URI = os.environ.get("MONGO_URI")
+
+if not MONGO_URI:
+    raise ValueError("MONGO_URI not set in .env or environment. MongoDB connection is required.")
+
+# Mask URI for safe logging (show user + cluster, hide password)
+try:
+    masked = MONGO_URI.split("@")[1].split("/")[0] if "@" in MONGO_URI else "unknown"
+    print(f"[DB] Connecting to MongoDB Atlas ({masked})...")
+except Exception:
+    print("[DB] Connecting to MongoDB Atlas...")
 
 try:
-    import certifi
-    from pymongo import MongoClient
-
-    MONGO_URI = os.environ.get("MONGO_URI")
-
-    if not MONGO_URI:
-        raise Exception("MONGO_URI not set")
-
     _client = MongoClient(
         MONGO_URI,
         serverSelectionTimeoutMS=5000,
@@ -35,176 +43,35 @@ try:
         tlsCAFile=certifi.where()
     )
 
+    # Startup ping to verify connection
     _client.admin.command("ping")
-
-    _db = _client["faculty_ai"]
-
-    _db.chat_messages.create_index([("session_id", 1), ("timestamp", 1)])
-    _db.chat_sessions.create_index([("session_id", 1)], unique=True)
-    _db.chat_sessions.create_index([("updated_at", -1)])
-
-    _mongo_available = True
-    print("[DB] MongoDB connected successfully.")
-
+    print("[DB] ✅ MongoDB Atlas connected successfully!")
 except Exception as e:
-    print(f"[DB] MongoDB not available ({e}). Using local JSON file storage.")
+    print(f"[DB] ❌ CRITICAL: MongoDB connection failed: {e}")
+    raise ConnectionError(f"Strict MongoDB mode enabled, but connection failed: {e}")
 
+# Extract database name from URI or use default
+db_name = "facultyai"
+if "/" in MONGO_URI.split("@")[-1]:
+    uri_db = MONGO_URI.split("@")[-1].split("/")[1].split("?")[0]
+    if uri_db:
+        db_name = uri_db
 
-# ─── JSON File Fallback ───────────────────────────────────────────────────────
-HISTORY_FILE = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)),
-    "chat_history.json"
-)
+_db = _client[db_name]
+print(f"[DB] ✅ Using database: '{db_name}'")
 
+_db.chat_messages.create_index([("session_id", 1), ("timestamp", 1)])
+_db.chat_sessions.create_index([("session_id", 1)], unique=True)
+_db.chat_sessions.create_index([("updated_at", -1)])
 
-def _load_json():
-    if os.path.exists(HISTORY_FILE):
-        try:
-            with open(HISTORY_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception:
-            return {"sessions": {}, "messages": {}}
-    return {"sessions": {}, "messages": {}}
-
-
-def _save_json(data):
-    with open(HISTORY_FILE, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2, ensure_ascii=False)
+print("[DB] ✅ Indexes verified. MongoDB is ready.")
 
 
 # ─── Unified API ──────────────────────────────────────────────────────────────
 
 def save_message(session_id, role, content, response_data=None):
     now = datetime.utcnow()
-    now_str = now.strftime("%Y-%m-%d %H:%M:%S")
-
-    if _mongo_available:
-        _mongo_save_message(session_id, role, content, response_data, now)
-    else:
-        _json_save_message(session_id, role, content, response_data, now_str)
-
-
-def get_history(session_id):
-    if _mongo_available:
-        return _mongo_get_history(session_id)
-    else:
-        return _json_get_history(session_id)
-
-
-def get_sessions(limit=20):
-    if _mongo_available:
-        return _mongo_get_sessions(limit)
-    else:
-        return _json_get_sessions(limit)
-
-
-def clear_history(session_id):
-    if _mongo_available:
-        _mongo_clear_history(session_id)
-    else:
-        _json_clear_history(session_id)
-
-
-def clear_all_history():
-    if _mongo_available:
-        _mongo_clear_all()
-    else:
-        _json_clear_all()
-
-
-# ─── JSON File Implementations (Thread Safe) ─────────────────────────────────
-
-def _json_save_message(session_id, role, content, response_data, now_str):
-    with _json_lock:
-        data = _load_json()
-
-        if session_id not in data["sessions"]:
-            title = content[:50] if role == "user" else "New Chat"
-            data["sessions"][session_id] = {
-                "session_id": session_id,
-                "title": title,
-                "created_at": now_str,
-                "updated_at": now_str,
-            }
-        else:
-            data["sessions"][session_id]["updated_at"] = now_str
-
-        if session_id not in data["messages"]:
-            data["messages"][session_id] = []
-
-        msg = {
-            "role": role,
-            "content": content,
-            "timestamp": now_str,
-        }
-
-        if response_data:
-            msg["response_data"] = response_data
-
-        data["messages"][session_id].append(msg)
-        _save_json(data)
-
-
-def _json_get_history(session_id):
-    with _json_lock:
-        data = _load_json()
-
-    messages = data.get("messages", {}).get(session_id, [])
-    result = []
-
-    for msg in messages:
-        m = dict(msg)
-        try:
-            dt = datetime.strptime(m["timestamp"], "%Y-%m-%d %H:%M:%S")
-            m["timestamp"] = dt.strftime("%H:%M")
-        except Exception:
-            pass
-        result.append(m)
-
-    return result
-
-
-def _json_get_sessions(limit):
-    with _json_lock:
-        data = _load_json()
-
-    sessions = list(data.get("sessions", {}).values())
-    sessions.sort(key=lambda s: s.get("updated_at", ""), reverse=True)
-
-    for s in sessions[:limit]:
-        try:
-            s["created_at"] = datetime.strptime(
-                s["created_at"], "%Y-%m-%d %H:%M:%S"
-            ).strftime("%b %d, %H:%M")
-        except Exception:
-            pass
-
-        try:
-            s["updated_at"] = datetime.strptime(
-                s["updated_at"], "%Y-%m-%d %H:%M:%S"
-            ).strftime("%b %d, %H:%M")
-        except Exception:
-            pass
-
-    return sessions[:limit]
-
-
-def _json_clear_history(session_id):
-    with _json_lock:
-        data = _load_json()
-        data["sessions"].pop(session_id, None)
-        data["messages"].pop(session_id, None)
-        _save_json(data)
-
-
-def _json_clear_all():
-    with _json_lock:
-        _save_json({"sessions": {}, "messages": {}})
-
-
-# ─── MongoDB Implementations ─────────────────────────────────────────────────
-
-def _mongo_save_message(session_id, role, content, response_data, now):
+    
     session_title = content[:50] if role == "user" else "New Chat"
 
     _db.chat_sessions.update_one(
@@ -233,7 +100,7 @@ def _mongo_save_message(session_id, role, content, response_data, now):
     _db.chat_messages.insert_one(message)
 
 
-def _mongo_get_history(session_id):
+def get_history(session_id):
     messages = list(
         _db.chat_messages.find(
             {"session_id": session_id},
@@ -247,7 +114,7 @@ def _mongo_get_history(session_id):
     return messages
 
 
-def _mongo_get_sessions(limit):
+def get_sessions(limit=20):
     sessions = list(
         _db.chat_sessions.find({}, {"_id": 0})
         .sort("updated_at", -1)
@@ -261,11 +128,11 @@ def _mongo_get_sessions(limit):
     return sessions
 
 
-def _mongo_clear_history(session_id):
+def clear_history(session_id):
     _db.chat_messages.delete_many({"session_id": session_id})
     _db.chat_sessions.delete_one({"session_id": session_id})
 
 
-def _mongo_clear_all():
+def clear_all_history():
     _db.chat_messages.delete_many({})
     _db.chat_sessions.delete_many({})
