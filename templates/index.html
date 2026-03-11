@@ -845,6 +845,20 @@
             text-align: center;
         }
 
+        /* ─── SUGGESTION BAR ─── */
+        .suggestion-bar {
+            display: flex;
+            gap: 8px;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-top: 10px;
+        }
+
+        .suggestion-bar .sug-chip {
+            font-size: 12px;
+            padding: 6px 14px;
+        }
+
         /* ─── MOBILE MENU ──────────────────────── */
         .mobile-menu-btn {
             display: none;
@@ -980,9 +994,13 @@
             }
 
             .welcome {
+                /* On mobile: don't use height:100% centering — causes huge gap when chat messages appear */
+                height: auto;
+                justify-content: flex-start;
                 gap: 12px;
                 padding: 20px 8px 10px;
-                justify-content: flex-start;
+                text-align: center;
+                align-items: center;
             }
 
             .welcome-icon {
@@ -1006,6 +1024,28 @@
             .quick-btn {
                 font-size: 12px;
                 padding: 7px 13px;
+            }
+
+            /* Suggestion chips: one scrollable horizontal row, never wraps or clips */
+            .suggestion-bar {
+                display: flex;
+                flex-wrap: nowrap;
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+                scrollbar-width: none;
+                gap: 7px;
+                margin-top: 7px;
+                padding-bottom: 4px;
+                justify-content: flex-start;
+            }
+
+            .suggestion-bar::-webkit-scrollbar { display: none; }
+
+            .suggestion-bar .sug-chip {
+                font-size: 12px;
+                padding: 6px 12px;
+                white-space: nowrap;
+                flex-shrink: 0;
             }
 
             .faculty-card { border-radius: 10px; }
