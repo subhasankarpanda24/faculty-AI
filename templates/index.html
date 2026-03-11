@@ -1086,9 +1086,9 @@
                 <button class="send-btn" id="sendBtn" onclick="sendMessage()" title="Send">➤</button>
             </div>
             <div class="suggestion-bar">
-                <span class="sug-chip" onclick="sendQuick('Who teaches Machine Learning?')">📚 Find by Subject</span>
-                <span class="sug-chip" onclick="sendQuick('Show all CSE faculty')">🏢 Find by Department</span>
-                <span class="sug-chip" onclick="sendQuick('Faculty working on IoT')">🔬 Find by Research Area</span>
+                <span class="sug-chip" onclick="startIntent('subject')">📚 Find by Subject</span>
+                <span class="sug-chip" onclick="startIntent('department')">🏢 Find by Department</span>
+                <span class="sug-chip" onclick="startIntent('research')">🔬 Find by Research Area</span>
                 <span class="sug-chip" onclick="sendQuick('List all faculty')">📋 Show All Faculty</span>
             </div>
             <div class="input-hint">Enter to send &nbsp;·&nbsp; Shift+Enter for new line</div>
@@ -1216,6 +1216,60 @@
             document.getElementById("question").value = text;
             sendMessage();
         }
+
+        // ─── Intent Wizard State Machine ───────────────
+        let pendingIntent = null; // 'subject' | 'department' | 'research' | null
+
+        const intentConfig = {
+            subject: {
+                question: "📚 Sure! Which <strong>subject</strong> are you looking for? <br><span style='font-size:12px;color:var(--muted)'>e.g. Machine Learning, Data Structures, VLSI, Embedded Systems…</span>",
+                buildQuery: (val) => `Who teaches ${val}?`
+            },
+            department: {
+                question: `🏢 Which <strong>department</strong> would you like to search in?<br>
+<div class="sug-chips" style="margin-top:8px">
+  <span class="sug-chip" onclick="resolveIntent('CSE')">CSE</span>
+  <span class="sug-chip" onclick="resolveIntent('ECE')">ECE</span>
+  <span class="sug-chip" onclick="resolveIntent('EEE')">EEE</span>
+  <span class="sug-chip" onclick="resolveIntent('Mechanical')">Mechanical</span>
+  <span class="sug-chip" onclick="resolveIntent('Civil')">Civil</span>
+  <span class="sug-chip" onclick="resolveIntent('MCA')">MCA</span>
+  <span class="sug-chip" onclick="resolveIntent('MBA')">MBA</span>
+  <span class="sug-chip" onclick="resolveIntent('Physics')">Physics</span>
+  <span class="sug-chip" onclick="resolveIntent('Chemistry')">Chemistry</span>
+  <span class="sug-chip" onclick="resolveIntent('Mathematics')">Mathematics</span>
+  <span class="sug-chip" onclick="resolveIntent('Biotechnology')">Biotechnology</span>
+  <span class="sug-chip" onclick="resolveIntent('Pharmaceutical')">Pharmaceutical</span>
+</div>
+<span style='font-size:12px;color:var(--muted)'>Or just type the department name below.</span>`,
+                buildQuery: (val) => `Show all ${val} faculty`
+            },
+            research: {
+                question: "🔬 Which <strong>research area</strong> are you interested in? <br><span style='font-size:12px;color:var(--muted)'>e.g. IoT, Machine Learning, Image Processing, Renewable Energy…</span>",
+                buildQuery: (val) => `Faculty working on ${val}`
+            }
+        };
+
+        function startIntent(intent) {
+            // Remove welcome screen if visible
+            const welcome = document.getElementById("welcome");
+            if (welcome) welcome.remove();
+
+            pendingIntent = intent;
+            const config = intentConfig[intent];
+            appendBotText(config.question);
+            document.getElementById("question").focus();
+        }
+
+        function resolveIntent(value) {
+            // Called from department quick chips inside the bot message
+            if (!pendingIntent) return;
+            const config = intentConfig[pendingIntent];
+            const query = config.buildQuery(value);
+            pendingIntent = null;
+            appendUser(value);
+            runQuery(query);
+        }
         function getTime() {
             return new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
         }
@@ -1256,17 +1310,27 @@
             const welcome = document.getElementById("welcome");
             if (welcome) welcome.remove();
 
+            // If there is a pending intent, build the query from the user's answer
+            let queryToSend = question;
+            if (pendingIntent && intentConfig[pendingIntent]) {
+                queryToSend = intentConfig[pendingIntent].buildQuery(question);
+                pendingIntent = null;
+            }
+
             appendUser(question);
             input.value = "";
             input.style.height = "auto";
 
-            const typingEl = appendTyping();
+            runQuery(queryToSend);
+        }
 
+        async function runQuery(query) {
+            const typingEl = appendTyping();
             try {
                 const res = await fetch("/ask", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ question, session_id: currentSessionId })
+                    body: JSON.stringify({ question: query, session_id: currentSessionId })
                 });
                 const data = await res.json();
                 typingEl.remove();
@@ -1275,7 +1339,6 @@
                 typingEl.remove();
                 appendBotText("⚠ Connection error. Make sure the backend server is running.");
             }
-
             setTimeout(loadHistory, 500);
         }
 
