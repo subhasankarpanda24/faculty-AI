@@ -114,35 +114,35 @@ def load_faculty_from_excel(excel_path: str = None) -> List[Dict]:
             # Normalize field names (Excel headers → snake_case keys)
             normalized = {}
             key_map = {
-                "Full Name": "name",
-                "Title": "title",
-                "First Name": "first_name",
-                "Last Name": "last_name",
-                "Designation": "designation",
-                "Department": "department",
-                "Core Subjects": "subjects",
-                "Research Areas": "research_areas",
-                "Qualification": "qualification",
-                "Years of Experience": "experience",
-                "Room / Cabin No.": "room_no",
-                "Available Days": "available_days",
-                "Available Timings": "available_time",
-                "Consultation Mode": "consultation_mode",
-                "Email": "email",
-                "Phone": "phone",
-                "Profile URL": "profile_url",
-                "Photo URL": "photo_url",
-                "Short Bio": "bio",
-                "Has PhD": "has_phd",
-                "Profile Completeness %": "profile_completeness",
+                "name": ["Full Name", "Name", "name"],
+                "title": ["Title", "title"],
+                "first_name": ["First Name", "first_name"],
+                "last_name": ["Last Name", "last_name"],
+                "designation": ["Designation", "designation"],
+                "department": ["Department", "department"],
+                "subjects": ["Core Subjects", "subjects"],
+                "research_areas": ["Research Areas", "research_areas"],
+                "qualification": ["Qualification", "qualification"],
+                "experience": ["Years of Experience", "Experience", "experience"],
+                "room_no": ["Room / Cabin No.", "Cabin", "room_no", "Room"],
+                "available_days": ["Available Days", "available_days"],
+                "available_time": ["Available Timings", "Available Time", "available_time"],
+                "consultation_mode": ["Consultation Mode", "Consultation Modes", "consultation_mode"],
+                "email": ["Email", "email"],
+                "phone": ["Phone", "phone"],
+                "profile_url": ["Profile URL", "URL", "profile_url"],
+                "photo_url": ["Photo URL", "photo_url"],
+                "bio": ["Short Bio", "Bio", "bio"],
+                "has_phd": ["Has PhD", "has_phd"],
+                "profile_completeness": ["Profile Completeness %", "profile_completeness"],
             }
-            for excel_key, snake_key in key_map.items():
-                if excel_key in record:
-                    normalized[snake_key] = record[excel_key]
-                elif snake_key in record:
-                    normalized[snake_key] = record[snake_key]
-                else:
-                    normalized[snake_key] = "N/A"
+            for snake_key, possible_keys in key_map.items():
+                val = "N/A"
+                for k in possible_keys:
+                    if k in record and str(record[k]).strip() != "N/A" and str(record[k]).strip() != "":
+                        val = record[k]
+                        break
+                normalized[snake_key] = val
 
             record.update(normalized)
 
