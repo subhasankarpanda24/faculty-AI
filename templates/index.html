@@ -1427,14 +1427,28 @@
             const row = document.createElement("div");
             row.className = "msg-row bot";
 
-            const subjects = (f.core_subjects || []).map(s =>
+            // Helper: render a row only if data is valid (not N/A / empty)
+            function infoRow(icon, label, value, isHtml) {
+                if (!isValid(value)) return '';
+                const content = isHtml ? value : `<span class="info-val">${esc(value)}</span>`;
+                return `<div class="info-row">
+                    <span class="info-icon">${icon}</span>
+                    <div class="info-block">
+                        <span class="info-label">${label}</span>
+                        ${content}
+                    </div>
+                </div>`;
+            }
+
+            const subjects = (f.core_subjects || []).filter(s => isValid(s)).map(s =>
                 `<span class="tag subject">${esc(s)}</span>`).join("");
 
-            const research = (f.research_areas || []).map(r =>
+            const research = (f.research_areas || []).filter(r => isValid(r)).map(r =>
                 `<span class="tag research">${esc(r)}</span>`).join("");
 
-            const modes = (f.consultation_modes || "").split(",").map(m =>
-                `<span class="tag mode">${esc(m.trim())}</span>`).join("");
+            const modesRaw = f.consultation_modes || "";
+            const modes = modesRaw.split(",").map(m => m.trim()).filter(m => isValid(m)).map(m =>
+                `<span class="tag mode">${esc(m)}</span>`).join("");
 
             const altHtml = alternates.length > 0 ? `
     <div class="divider"></div>
@@ -1444,120 +1458,42 @@
         <div class="alt-dot"></div>
         <div>
           <div class="alt-name">${esc(a.name)}</div>
-          <div class="alt-sub">${(a.core_subjects || []).join(", ")}</div>
+          <div class="alt-sub">${(a.core_subjects || []).filter(s=>isValid(s)).join(", ")}</div>
         </div>
-        <div style="margin-left:auto;font-size:11.5px;color:var(--muted2)">${esc(a.cabin || '')}</div>
+        ${isValid(a.cabin) ? `<div style="margin-left:auto;font-size:11.5px;color:var(--muted2)">${esc(a.cabin)}</div>` : ''}
       </div>`).join("")}
   ` : "";
 
             const confLabel = f.confidence === "high" ? "✓ Best Match" : f.confidence === "medium" ? "~ Good Match" : "Possible Match";
+            const deptDisplay = isValid(f.department) ? `<div class="card-dept">${esc(f.department)}</div>` : '';
 
             row.innerHTML = `
     <div class="avatar b">🎓</div>
     <div class="bubble bot" style="max-width:640px; padding:0; background:var(--surface2);">
       <div style="padding:13px 17px 4px; font-size:14px;">Here's the best faculty match I found:</div>
       <div class="faculty-card" style="margin:0 10px 0; border-radius:12px; border-color:rgba(255,255,255,0.1);">
-
         <div class="card-header">
           <div class="card-av">👨‍🏫</div>
           <div class="card-meta">
             <div class="card-name">${esc(f.name)}</div>
-            <div class="card-desig">${esc(f.designation)}</div>
-            <div class="card-dept">${esc(f.department)}</div>
+            ${isValid(f.designation) ? `<div class="card-desig">${esc(f.designation)}</div>` : ''}
+            ${deptDisplay}
           </div>
           <div class="conf-badge ${f.confidence}">${confLabel}</div>
         </div>
-
         <div class="card-body">
-
-          <div class="info-row">
-            <span class="info-icon">📚</span>
-            <div class="info-block">
-              <span class="info-label">Core Subjects</span>
-              <div class="tag-list">${subjects || '<span class="info-val">N/A</span>'}</div>
-            </div>
-          </div>
-
-          <div class="info-row">
-            <span class="info-icon">🔬</span>
-            <div class="info-block">
-              <span class="info-label">Research Areas</span>
-              <div class="tag-list">${research || '<span class="info-val">N/A</span>'}</div>
-            </div>
-          </div>
-
-          <div class="info-row">
-            <span class="info-icon">🎓</span>
-            <div class="info-block">
-              <span class="info-label">Qualification</span>
-              <span class="info-val">${esc(f.qualification)}</span>
-            </div>
-          </div>
-
-          <div class="info-row">
-            <span class="info-icon">🏅</span>
-            <div class="info-block">
-              <span class="info-label">Experience</span>
-              <span class="info-val">${esc(f.experience)}</span>
-            </div>
-          </div>
-
-          <div class="divider"></div>
-
-          <div class="info-row">
-            <span class="info-icon">🏢</span>
-            <div class="info-block">
-              <span class="info-label">Cabin</span>
-              <span class="info-val">${esc(f.cabin)}</span>
-            </div>
-          </div>
-
-          <div class="info-row">
-            <span class="info-icon">📅</span>
-            <div class="info-block">
-              <span class="info-label">Available Days</span>
-              <span class="info-val">${esc(f.available_days)}</span>
-            </div>
-          </div>
-
-          <div class="info-row">
-            <span class="info-icon">⏰</span>
-            <div class="info-block">
-              <span class="info-label">Available Time</span>
-              <span class="info-val">${esc(f.available_time)}</span>
-            </div>
-          </div>
-
-          <div class="info-row">
-            <span class="info-icon">💬</span>
-            <div class="info-block">
-              <span class="info-label">Consultation Modes</span>
-              <div class="tag-list">${modes}</div>
-            </div>
-          </div>
-
-          <div class="info-row">
-            <span class="info-icon">📧</span>
-            <div class="info-block">
-              <span class="info-label">Email</span>
-              <span class="info-val">${esc(f.email)}</span>
-            </div>
-          </div>
-
-          <div class="info-row">
-            <span class="info-icon">📞</span>
-            <div class="info-block">
-              <span class="info-label">Phone</span>
-              <span class="info-val">${esc(f.phone)}</span>
-            </div>
-          </div>
-
-          <div class="divider"></div>
-
-          <div class="profile-summary">${esc(f.profile_summary)}</div>
-
+          ${subjects ? `<div class="info-row"><span class="info-icon">📚</span><div class="info-block"><span class="info-label">Core Subjects</span><div class="tag-list">${subjects}</div></div></div>` : ''}
+          ${research ? `<div class="info-row"><span class="info-icon">🔬</span><div class="info-block"><span class="info-label">Research Areas</span><div class="tag-list">${research}</div></div></div>` : ''}
+          ${infoRow('🎓', 'Qualification', f.qualification)}
+          ${infoRow('🏅', 'Experience', f.experience)}
+          ${infoRow('🏢', 'Cabin', f.cabin)}
+          ${infoRow('📅', 'Available Days', f.available_days)}
+          ${infoRow('⏰', 'Available Time', f.available_time)}
+          ${modes ? `<div class="info-row"><span class="info-icon">💬</span><div class="info-block"><span class="info-label">Consultation Modes</span><div class="tag-list">${modes}</div></div></div>` : ''}
+          ${infoRow('📧', 'Email', f.email)}
+          ${infoRow('📞', 'Phone', f.phone)}
+          ${isValid(f.profile_summary) ? `<div class="divider"></div><div class="profile-summary">${esc(f.profile_summary)}</div>` : ''}
           ${altHtml}
-
         </div>
       </div>
       <span class="bubble-time" style="padding:8px 17px;display:block">${getTime()}</span>
@@ -1567,21 +1503,34 @@
             chat.scrollTop = chat.scrollHeight;
         }
 
+        function isValid(v) {
+            if (!v) return false;
+            const s = String(v).trim();
+            return s !== '' && s.toLowerCase() !== 'n/a' && s.toLowerCase() !== 'null' && s.toLowerCase() !== 'undefined';
+        }
+
         function renderListAll(list) {
             const chat = document.getElementById("chat");
             const row = document.createElement("div");
             row.className = "msg-row bot";
 
-            const cards = list.map(f => `
+            const cards = list.map(f => {
+                const subjectsText = (f.core_subjects || []).filter(s => isValid(s)).join(", ");
+                const cabinText = isValid(f.cabin) ? `<div style="margin-left:auto;font-size:11.5px;color:var(--muted2);flex-shrink:0">${esc(f.cabin)}</div>` : '';
+                const subjectsHtml = subjectsText ? `<div style="font-size:11.5px;color:var(--accent2);margin-top:2px">${esc(subjectsText)}</div>` : '';
+                const desig = [isValid(f.designation) ? esc(f.designation) : null,
+                               isValid(f.department) ? esc(f.department) : null].filter(Boolean).join(' · ');
+                return `
     <div class="fac-list-card" onclick="sendQuick('Tell me about ${f.name}')">
       <div class="fac-list-av">👨‍🏫</div>
       <div style="min-width:0">
         <div style="font-size:13.5px;font-weight:600">${esc(f.name)}</div>
-        <div style="font-size:11.5px;color:var(--muted2)">${esc(f.designation)} · ${esc(f.department)}</div>
-        <div style="font-size:11.5px;color:var(--accent2);margin-top:2px">${(f.core_subjects || []).join(", ")}</div>
+        ${desig ? `<div style="font-size:11.5px;color:var(--muted2)">${desig}</div>` : ''}
+        ${subjectsHtml}
       </div>
-      <div style="margin-left:auto;font-size:11.5px;color:var(--muted2);flex-shrink:0">${esc(f.cabin)}</div>
-    </div>`).join("");
+      ${cabinText}
+    </div>`;
+            }).join("");
 
             row.innerHTML = `
     <div class="avatar b">🎓</div>

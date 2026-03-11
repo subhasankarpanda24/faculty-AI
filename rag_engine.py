@@ -757,9 +757,26 @@ def handle_chat_message(user_input: str) -> Dict:
 
     lower = user_input.lower()
 
-    # Step 2: Check for "list all" / "show all faculty"
-    list_patterns = ["list all", "show all", "all faculty", "all professors",
-                     "all teachers", "faculty list", "show faculty", "who are the faculty"]
+    # Step 2: Department-specific query — MUST be checked BEFORE generic "show all"
+    # e.g. "Show all CSE faculty", "Show all Chemistry faculty"
+    dept_match = re.search(r"(?:show|list|all)\s+(\w[\w\s]*?)\s+faculty", lower)
+    if dept_match:
+        dept_query = dept_match.group(1).strip()
+        # Only proceed if it's not purely "all" (which would be "all all faculty" edge case)
+        if dept_query not in ("all", "the"):
+            dept_results = get_faculty_by_department(dept_query)
+            if dept_results:
+                return {
+                    "type": "faculty_list",
+                    "results": dept_results,
+                    "reply": f"Found {len(dept_results)} faculty in {dept_query.upper()} department:",
+                    "query": user_input,
+                }
+
+    # Step 3: Generic "list all / show all faculty" (no specific dept)
+    list_patterns = ["list all faculty", "show all faculty", "all faculty", "all professors",
+                     "all teachers", "faculty list", "show faculty", "who are the faculty",
+                     "list all"]
     if any(p in lower for p in list_patterns):
         all_fac = get_all_faculty()
         return {
@@ -768,19 +785,6 @@ def handle_chat_message(user_input: str) -> Dict:
             "reply": f"Here are all {len(all_fac)} faculty members:",
             "query": user_input,
         }
-
-    # Step 3: Department query — "show all CSE faculty"
-    dept_match = re.search(r"(?:show|list|all)\s+(\w+)\s+faculty", lower)
-    if dept_match:
-        dept_query = dept_match.group(1)
-        dept_results = get_faculty_by_department(dept_query)
-        if dept_results:
-            return {
-                "type": "faculty_list",
-                "results": dept_results,
-                "reply": f"Found {len(dept_results)} faculty in {dept_query.upper()}:",
-                "query": user_input,
-            }
 
     # Step 4: "tell me more about [name]"
     more_match = re.search(r"(?:tell me (?:more )?about|who is|details (?:of|about)|profile of)\s+(.+)", lower)
