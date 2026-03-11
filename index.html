@@ -570,14 +570,153 @@ function renderFacultyCard(f, alternates) {
   const row = document.createElement("div");
   row.className = "msg-row bot";
 
-  const subjects = (f.core_subjects || []).map(s =>
-    `<span class="tag subject">${esc(s)}</span>`).join("");
+  const isValidList = (lst) => lst && Array.isArray(lst) && lst.length > 0 && lst[0] !== "N/A" && lst[0] !== "";
+  const isValidStr = (str) => {
+    if (!str) return false;
+    const lower = String(str).toLowerCase().trim();
+    if (lower === "" || lower === "n/a" || lower === "null" || lower === "unknown" || lower === "not available") return false;
+    return true;
+  };
 
-  const research = (f.research_areas || []).map(r =>
-    `<span class="tag research">${esc(r)}</span>`).join("");
+  const rowsHtml = [];
 
-  const modes = (f.consultation_modes || "").split(",").map(m =>
-    `<span class="tag mode">${esc(m.trim())}</span>`).join("");
+  if (isValidList(f.core_subjects)) {
+    const subjects = f.core_subjects.map(s => `<span class="tag subject">${esc(s)}</span>`).join("");
+    if (subjects) {
+      rowsHtml.push(`
+        <div class="info-row">
+          <span class="info-icon">📚</span>
+          <div class="info-block">
+            <span class="info-label">Core Subjects</span>
+            <div class="tag-list">${subjects}</div>
+          </div>
+        </div>`);
+    }
+  }
+
+  if (isValidList(f.research_areas)) {
+    const research = f.research_areas.map(r => `<span class="tag research">${esc(r)}</span>`).join("");
+    if (research) {
+      rowsHtml.push(`
+        <div class="info-row">
+          <span class="info-icon">🔬</span>
+          <div class="info-block">
+            <span class="info-label">Research Areas</span>
+            <div class="tag-list">${research}</div>
+          </div>
+        </div>`);
+    }
+  }
+
+  if (isValidStr(f.qualification)) {
+    rowsHtml.push(`
+      <div class="info-row">
+        <span class="info-icon">🎓</span>
+        <div class="info-block">
+          <span class="info-label">Qualification</span>
+          <span class="info-val">${esc(f.qualification)}</span>
+        </div>
+      </div>`);
+  }
+
+  if (isValidStr(f.experience)) {
+    rowsHtml.push(`
+      <div class="info-row">
+        <span class="info-icon">🏅</span>
+        <div class="info-block">
+          <span class="info-label">Experience</span>
+          <span class="info-val">${esc(f.experience)}</span>
+        </div>
+      </div>`);
+  }
+
+  const hasCabin = isValidStr(f.cabin);
+  const hasDays = isValidStr(f.available_days);
+  const hasTime = isValidStr(f.available_time);
+  const hasModes = isValidStr(f.consultation_modes);
+  const hasEmail = isValidStr(f.email);
+  const hasPhone = isValidStr(f.phone);
+
+  if (rowsHtml.length > 0 && (hasCabin || hasDays || hasTime || hasModes || hasEmail || hasPhone)) {
+      rowsHtml.push(`<div class="divider"></div>`);
+  }
+
+  if (hasCabin) {
+    rowsHtml.push(`
+      <div class="info-row">
+        <span class="info-icon">🏢</span>
+        <div class="info-block">
+          <span class="info-label">Cabin</span>
+          <span class="info-val">${esc(f.cabin)}</span>
+        </div>
+      </div>`);
+  }
+
+  if (hasDays) {
+    rowsHtml.push(`
+      <div class="info-row">
+        <span class="info-icon">📅</span>
+        <div class="info-block">
+          <span class="info-label">Available Days</span>
+          <span class="info-val">${esc(f.available_days)}</span>
+        </div>
+      </div>`);
+  }
+
+  if (hasTime) {
+    rowsHtml.push(`
+      <div class="info-row">
+        <span class="info-icon">⏰</span>
+        <div class="info-block">
+          <span class="info-label">Available Time</span>
+          <span class="info-val">${esc(f.available_time)}</span>
+        </div>
+      </div>`);
+  }
+
+  if (hasModes) {
+    const modes = f.consultation_modes.split(",").map(m => `<span class="tag mode">${esc(m.trim())}</span>`).join("");
+    if (modes) {
+      rowsHtml.push(`
+        <div class="info-row">
+          <span class="info-icon">💬</span>
+          <div class="info-block">
+            <span class="info-label">Consultation Modes</span>
+            <div class="tag-list">${modes}</div>
+          </div>
+        </div>`);
+    }
+  }
+
+  if (hasEmail) {
+    rowsHtml.push(`
+      <div class="info-row">
+        <span class="info-icon">📧</span>
+        <div class="info-block">
+          <span class="info-label">Email</span>
+          <span class="info-val">${esc(f.email)}</span>
+        </div>
+      </div>`);
+  }
+
+  if (hasPhone) {
+    rowsHtml.push(`
+      <div class="info-row">
+        <span class="info-icon">📞</span>
+        <div class="info-block">
+          <span class="info-label">Phone</span>
+          <span class="info-val">${esc(f.phone)}</span>
+        </div>
+      </div>`);
+  }
+
+  const hasSummary = isValidStr(f.profile_summary);
+  if (hasSummary) {
+      if (rowsHtml.length > 0 && rowsHtml[rowsHtml.length - 1] !== `<div class="divider"></div>`) {
+          rowsHtml.push(`<div class="divider"></div>`);
+      }
+      rowsHtml.push(`<div class="profile-summary">${esc(f.profile_summary)}</div>`);
+  }
 
   const altHtml = alternates.length > 0 ? `
     <div class="divider"></div>
@@ -589,7 +728,7 @@ function renderFacultyCard(f, alternates) {
           <div class="alt-name">${esc(a.name)}</div>
           <div class="alt-sub">${(a.core_subjects || []).join(", ")}</div>
         </div>
-        <div style="margin-left:auto;font-size:11.5px;color:var(--muted2)">${esc(a.cabin)}</div>
+        <div style="margin-left:auto;font-size:11.5px;color:var(--muted2)">${isValidStr(a.cabin) ? esc(a.cabin) : ''}</div>
       </div>`).join("")}
   ` : "";
 
@@ -605,102 +744,15 @@ function renderFacultyCard(f, alternates) {
           <div class="card-av">👨‍🏫</div>
           <div class="card-meta">
             <div class="card-name">${esc(f.name)}</div>
-            <div class="card-desig">${esc(f.designation)}</div>
-            <div class="card-dept">${esc(f.department)}</div>
+            ${isValidStr(f.designation) ? `<div class="card-desig">${esc(f.designation)}</div>` : ''}
+            ${isValidStr(f.department) ? `<div class="card-dept">${esc(f.department)}</div>` : ''}
           </div>
           <div class="conf-badge ${f.confidence}">${confLabel}</div>
         </div>
 
         <div class="card-body">
-
-          <div class="info-row">
-            <span class="info-icon">📚</span>
-            <div class="info-block">
-              <span class="info-label">Core Subjects</span>
-              <div class="tag-list">${subjects}</div>
-            </div>
-          </div>
-
-          <div class="info-row">
-            <span class="info-icon">🔬</span>
-            <div class="info-block">
-              <span class="info-label">Research Areas</span>
-              <div class="tag-list">${research}</div>
-            </div>
-          </div>
-
-          <div class="info-row">
-            <span class="info-icon">🎓</span>
-            <div class="info-block">
-              <span class="info-label">Qualification</span>
-              <span class="info-val">${esc(f.qualification)}</span>
-            </div>
-          </div>
-
-          <div class="info-row">
-            <span class="info-icon">🏅</span>
-            <div class="info-block">
-              <span class="info-label">Experience</span>
-              <span class="info-val">${esc(f.experience)}</span>
-            </div>
-          </div>
-
-          <div class="divider"></div>
-
-          <div class="info-row">
-            <span class="info-icon">🏢</span>
-            <div class="info-block">
-              <span class="info-label">Cabin</span>
-              <span class="info-val">${esc(f.cabin)}</span>
-            </div>
-          </div>
-
-          <div class="info-row">
-            <span class="info-icon">📅</span>
-            <div class="info-block">
-              <span class="info-label">Available Days</span>
-              <span class="info-val">${esc(f.available_days)}</span>
-            </div>
-          </div>
-
-          <div class="info-row">
-            <span class="info-icon">⏰</span>
-            <div class="info-block">
-              <span class="info-label">Available Time</span>
-              <span class="info-val">${esc(f.available_time)}</span>
-            </div>
-          </div>
-
-          <div class="info-row">
-            <span class="info-icon">💬</span>
-            <div class="info-block">
-              <span class="info-label">Consultation Modes</span>
-              <div class="tag-list">${modes}</div>
-            </div>
-          </div>
-
-          <div class="info-row">
-            <span class="info-icon">📧</span>
-            <div class="info-block">
-              <span class="info-label">Email</span>
-              <span class="info-val">${esc(f.email)}</span>
-            </div>
-          </div>
-
-          <div class="info-row">
-            <span class="info-icon">📞</span>
-            <div class="info-block">
-              <span class="info-label">Phone</span>
-              <span class="info-val">${esc(f.phone)}</span>
-            </div>
-          </div>
-
-          <div class="divider"></div>
-
-          <div class="profile-summary">${esc(f.profile_summary)}</div>
-
+          ${rowsHtml.join("")}
           ${altHtml}
-
         </div>
       </div>
       <span class="bubble-time" style="padding:8px 17px;display:block">${getTime()}</span>
