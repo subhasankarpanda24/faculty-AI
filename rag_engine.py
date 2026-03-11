@@ -342,6 +342,153 @@ def _normalize(text: str) -> str:
     return text
 
 
+# ═══════════════════════════════════════════════════════════════
+# SUBJECT ↔ DEPARTMENT BOUNDARY MAPS
+# ═══════════════════════════════════════════════════════════════
+
+# Abbreviation / short-form → full subject name
+ABBREVIATIONS: Dict[str, str] = {
+    "os": "operating systems",
+    "dld": "digital logic design",
+    "bee": "basic electrical engineering",
+    "cn": "computer networks",
+    "dsa": "data structures and algorithms",
+    "ds": "data structures",
+    "dbms": "database management systems",
+    "ai": "artificial intelligence",
+    "ml": "machine learning",
+    "dl": "deep learning",
+    "nlp": "natural language processing",
+    "se": "software engineering",
+    "cd": "compiler design",
+    "vlsi": "vlsi design",
+    "emc": "electromagnetic compatibility",
+    "dsp": "digital signal processing",
+    "ece": "electronics and communication",
+    "eee": "electrical engineering",
+    "cse": "computer science",
+    "me": "mechanical engineering",
+    "ce": "civil engineering",
+    "mca": "mca computer applications",
+    "mba": "management",
+    "iot": "internet of things",
+    "cc": "cloud computing",
+    "wd": "web development",
+}
+
+# Keywords → which department string fragment to filter against
+SUBJECT_DEPT_MAP: List[Tuple[List[str], str]] = [
+    # CS / CSE
+    (
+        ["java", "python", "c++", "c programming", "data structures", "algorithms",
+         "dbms", "database", "operating systems", "computer networks", "artificial intelligence",
+         "machine learning", "deep learning", "nlp", "natural language",
+         "compiler design", "software engineering", "web development", "cloud computing",
+         "internet of things", "iot", "data mining", "software", "programming",
+         "computer", "theory of computation", "automata", "cryptography",
+         "object oriented", "oops", "dsa", "design patterns", "mobile app",
+         "android", "information security", "big data", "hadoop", "spark",
+         "cyber security", "blockchain"],
+        "computer science"
+    ),
+    # ECE
+    (
+        ["digital logic", "dld", "digital electronics", "analog circuits",
+         "vlsi", "signals and systems", "communication systems", "microprocessors",
+         "embedded systems", "arduino", "raspberry", "wireless", "antenna",
+         "dsp", "digital signal processing", "rf", "optical fiber",
+         "electromagnetics", "microcontroller", "8051", "fpga",
+         "telecommunications", "satellite", "radar", "image processing"],
+        "electronics"
+    ),
+    # EEE / Electrical
+    (
+        ["basic electrical", "bee", "power systems",
+         "electrical machines", "control systems", "power electronics",
+         "transformers", "motor", "generator", "high voltage",
+         "switchgear", "distribution", "transmission", "induction motor",
+         "drives", "plc", "scada", "renewable energy", "solar energy"],
+        "electrical"
+    ),
+    # Mechanical
+    (
+        ["thermodynamics", "fluid mechanics", "machine design", "manufacturing",
+         "heat transfer", "solid mechanics", "kinematics", "dynamics",
+         "cad", "cam", "cnc", "refrigeration", "air conditioning",
+         "turbine", "compressor", "strength of materials", "tribology",
+         "metallurgy", "welding", "casting", "sheet metal"],
+        "mechanical"
+    ),
+    # Civil
+    (
+        ["structural engineering", "surveying", "geotechnical", "environmental engineering",
+         "transportation engineering", "concrete", "hydraulics", "water resources",
+         "rcc", "highway", "earthquake engineering", "soil mechanics",
+         "construction management", "architecture", "building materials"],
+        "civil"
+    ),
+    # Physics
+    (
+        ["physics", "quantum", "optics", "mechanics", "thermodynamics physics",
+         "nuclear physics", "solid state physics", "laser", "semiconductor physics"],
+        "physics"
+    ),
+    # Chemistry
+    (
+        ["chemistry", "organic chemistry", "inorganic chemistry", "physical chemistry",
+         "analytical chemistry", "polymer", "reaction kinetics"],
+        "chemistry"
+    ),
+    # Mathematics
+    (
+        ["mathematics", "calculus", "linear algebra", "probability", "statistics",
+         "differential equations", "engineering mathematics", "numerical methods",
+         "discrete mathematics", "graph theory", "optimization"],
+        "mathematics"
+    ),
+    # Management / MBA
+    (
+        ["management", "mba", "marketing", "finance", "hrm", "human resource",
+         "accounting", "economics", "entrepreneurship", "business",
+         "operations management", "strategic management"],
+        "management"
+    ),
+    # Biotechnology
+    (
+        ["biotechnology", "microbiology", "genetics", "biochemistry",
+         "cell biology", "molecular biology", "bioinformatics", "genomics"],
+        "biotechnology"
+    ),
+    # Pharmaceutical
+    (
+        ["pharmacology", "pharmaceutical", "drug", "medicinal chemistry",
+         "pharmacy", "toxicology", "clinical research"],
+        "pharmaceutical"
+    ),
+]
+
+
+def _expand_abbreviation(text: str) -> str:
+    """Replace known abbreviations/short-forms with their full names."""
+    words = text.lower().strip().split()
+    expanded = [ABBREVIATIONS.get(w, w) for w in words]
+    return " ".join(expanded)
+
+
+def _detect_target_department(query: str) -> Optional[str]:
+    """
+    Given a query, detect which department it belongs to using the subject map.
+    Returns a partial department string (e.g. 'computer science', 'chemistry')
+    or None if no mapping found.
+    """
+    q = _expand_abbreviation(_normalize(query))
+    for subject_keywords, dept_fragment in SUBJECT_DEPT_MAP:
+        for kw in subject_keywords:
+            if kw in q:
+                return dept_fragment
+    return None
+
+
 def _fuzzy_score(query: str, target: str) -> int:
     """
     Calculate fuzzy match score between query and target.
@@ -363,10 +510,10 @@ def _fuzzy_score(query: str, target: str) -> int:
     return max(scores)
 
 
-def search_faculty(query: str, top_k: int = 3) -> List[Dict]:
+def search_faculty(query: str, top_k: int = 3, dept_filter: str = None) -> List[Dict]:
     """
-    Main search: fuzzy match across all searchable fields,
-    boosted by TF-IDF cosine similarity.
+    Main search: fuzzy match across all searchable fields boosted by TF-IDF.
+    Applies strict subject→department boundary if a mapping is detected.
     Returns top_k results, each with a 'score' field (0-100).
     """
     _check_reload()  # Auto-reload if Excel changed
@@ -374,56 +521,64 @@ def search_faculty(query: str, top_k: int = 3) -> List[Dict]:
     if not _faculty_data:
         return []
 
-    normalized_query = _normalize(query)
+    # Expand abbreviations first
+    expanded_query = _expand_abbreviation(query)
+    normalized_query = _normalize(expanded_query)
     if not normalized_query:
         return []
+
+    # Detect if query maps to a specific department (strict boundary enforcement)
+    target_dept = dept_filter or _detect_target_department(expanded_query)
 
     scored_results = []
 
     for faculty in _faculty_data:
+        fac_dept = _normalize(faculty.get("department", ""))
+
+        # STRICT BOUNDARY: if we detected a department, only search within it
+        if target_dept and target_dept not in fac_dept:
+            continue
+
         best_score = 0
 
-        # Match against various fields with different weights
-        match_fields = [
-            (faculty.get("name", ""),           1.0),
-            (faculty.get("subjects", ""),        0.95),
-            (faculty.get("department", ""),      0.85),
-            (faculty.get("research_areas", ""),  0.9),
-            (faculty.get("designation", ""),     0.7),
-            (faculty.get("qualification", ""),   0.5),
-            (faculty.get("bio", ""),             0.4),
-        ]
+        # Priority 1: exact subject match (highest weight)
+        subj_val = faculty.get("subjects", "")
+        if subj_val and subj_val != "N/A":
+            score = _fuzzy_score(normalized_query, _normalize(subj_val))
+            best_score = max(best_score, int(score * 1.0))
 
-        for field_value, weight in match_fields:
-            if not field_value or field_value == "N/A":
-                continue
+        # Priority 2: research area match
+        res_val = faculty.get("research_areas", "")
+        if res_val and res_val != "N/A":
+            score = _fuzzy_score(normalized_query, _normalize(res_val))
+            best_score = max(best_score, int(score * 0.9))
 
-            score = _fuzzy_score(normalized_query, _normalize(field_value))
-            weighted = int(score * weight)
+        # Priority 3: name match
+        name_val = faculty.get("name", "")
+        if name_val and name_val != "N/A":
+            score = _fuzzy_score(normalized_query, _normalize(name_val))
+            best_score = max(best_score, int(score * 1.0))
 
-            if weighted > best_score:
-                best_score = weighted
+        # Priority 4: department / designation / qualification as fallback
+        for field, weight in [
+            (faculty.get("department", ""),  0.6),
+            (faculty.get("designation", ""), 0.5),
+            (faculty.get("qualification", ""), 0.4),
+        ]:
+            if field and field != "N/A":
+                score = _fuzzy_score(normalized_query, _normalize(field))
+                best_score = max(best_score, int(score * weight))
+
+        # Bonus: if query term appears directly in subjects
+        if subj_val and normalized_query in _normalize(subj_val):
+            best_score = max(best_score, 90)
 
         # Bonus: exact name match
-        if normalized_query in _normalize(faculty.get("name", "")):
+        if normalized_query in _normalize(name_val):
             best_score = max(best_score, 95)
 
-        # Bonus: exact department abbreviation match
-        dept = _normalize(faculty.get("department", ""))
-        dept_abbrs = {
-            "cse": "computer science",
-            "ece": "electronics & communication",
-            "eee": "electrical engineering",
-            "me": "mechanical engineering",
-            "ce": "civil engineering",
-            "mba": "mba / management",
-            "it": "information technology",
-        }
-        for abbr, full in dept_abbrs.items():
-            if abbr in normalized_query.split() and full in dept:
-                best_score = max(best_score, 85)
-
-        if best_score >= 40:
+        threshold = 35 if target_dept else 40
+        if best_score >= threshold:
             result = dict(faculty)
             result["score"] = best_score
             scored_results.append(result)
@@ -431,27 +586,23 @@ def search_faculty(query: str, top_k: int = 3) -> List[Dict]:
     # Sort by score descending
     scored_results.sort(key=lambda x: x["score"], reverse=True)
 
-    # TF-IDF cosine similarity boost (replaces sentence-transformers)
-    if TFIDF_AVAILABLE and _tfidf_matrix is not None and _vectorizer is not None:
+    # TF-IDF cosine similarity boost (only when no strict dept filter)
+    if not target_dept and TFIDF_AVAILABLE and _tfidf_matrix is not None and _vectorizer is not None:
         try:
-            query_vec = _vectorizer.transform([query])
+            query_vec = _vectorizer.transform([expanded_query])
             sims = cosine_similarity(query_vec, _tfidf_matrix).flatten()
 
             for i, sim in enumerate(sims):
-                if sim >= 0.15:  # TF-IDF scores are typically lower than dense embeddings
+                if sim >= 0.15:
                     fac = _faculty_data[i]
-                    # Check if already in results
                     existing = next((r for r in scored_results if r.get("name") == fac.get("name")), None)
                     if existing:
-                        # Boost existing score
                         existing["score"] = min(100, existing["score"] + int(sim * 25))
                     elif sim >= 0.25:
-                        # Add new result from TF-IDF search
                         result = dict(fac)
                         result["score"] = int(sim * 80)
                         scored_results.append(result)
 
-            # Re-sort after TF-IDF boost
             scored_results.sort(key=lambda x: x["score"], reverse=True)
         except Exception as e:
             print(f"[RAG] TF-IDF search error: {e}")
@@ -486,27 +637,56 @@ def get_faculty_by_name(name: str) -> Optional[Dict]:
 
 
 def get_faculty_by_department(dept: str) -> List[Dict]:
-    """Find all faculty in a department (fuzzy)."""
+    """Find all faculty in a department (robust matching against verbose dept names)."""
     _check_reload()
     results = []
 
-    dept_norm = _normalize(dept)
-    dept_abbrs = {
+    dept_norm = _normalize(_expand_abbreviation(dept))
+
+    # Map common abbreviations / short names → fragment to search in dept string
+    dept_fragment_map = {
         "cse": "computer science",
-        "ece": "electronics & communication",
-        "eee": "electrical engineering",
-        "me": "mechanical engineering",
-        "ce": "civil engineering",
-        "mba": "mba / management",
-        "it": "information technology",
+        "computer science": "computer science",
+        "ece": "electronics",
+        "electronics": "electronics",
+        "eee": "electrical",
+        "electrical": "electrical",
+        "mechanical": "mechanical",
+        "me": "mechanical",
+        "civil": "civil",
+        "ce": "civil",
+        "mba": "management",
+        "management": "management",
+        "mca": "mca",
+        "physics": "physics",
+        "chemistry": "chemistry",
+        "mathematics": "mathematics",
+        "math": "mathematics",
+        "maths": "mathematics",
+        "biotechnology": "biotechnology",
+        "bio": "biotechnology",
+        "pharmaceutical": "pharmaceutical",
+        "pharma": "pharmaceutical",
+        "english": "english",
+        "admission": "admission",
+        "it infrastructure": "it infrastructure",
+        "pharmacy": "pharmaceutical",
     }
 
-    # Expand abbreviation
-    expanded = dept_abbrs.get(dept_norm, dept_norm)
+    # Find the best fragment to match
+    search_fragment = None
+    for key, fragment in dept_fragment_map.items():
+        if key in dept_norm:
+            search_fragment = fragment
+            break
+
+    # Fallback: use the raw input
+    if not search_fragment:
+        search_fragment = dept_norm
 
     for fac in _faculty_data:
         fac_dept = _normalize(fac.get("department", ""))
-        if expanded in fac_dept or dept_norm in fac_dept:
+        if search_fragment in fac_dept:
             result = dict(fac)
             result["score"] = 90
             results.append(result)
