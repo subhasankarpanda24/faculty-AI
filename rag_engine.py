@@ -1,3 +1,11 @@
+# ==========================================
+# Faculty AI - RAG Faculty Search Chatbot
+# Copyright (c) 2026 Subha Sankar Panda
+# All Rights Reserved.
+# Unauthorized copying, modification, or
+# distribution of this software is prohibited.
+# ==========================================
+
 """
 rag_engine.py — Lightweight RAG-based faculty search engine
 ============================================================

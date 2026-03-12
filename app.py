@@ -1,3 +1,11 @@
+# ==========================================
+# Faculty AI - RAG Faculty Search Chatbot
+# Copyright (c) 2026 Subha Sankar Panda
+# All Rights Reserved.
+# Unauthorized copying, modification, or
+# distribution of this software is prohibited.
+# ==========================================
+
 """
 app.py — Flask application for NIST Faculty AI
 ================================================
@@ -400,4 +408,4 @@ def health():
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port, debug=True)
+    app.run(host="0.0.0.0", port=port, debug=True, use_reloader=False)

@@ -1,3 +1,11 @@
+# ==========================================
+# Faculty AI - RAG Faculty Search Chatbot
+# Copyright (c) 2026 Subha Sankar Panda
+# All Rights Reserved.
+# Unauthorized copying, modification, or
+# distribution of this software is prohibited.
+# ==========================================
+
 import requests
 from bs4 import BeautifulSoup
 import re
